@@ -5,7 +5,7 @@ mod protocol;
 mod zk;
 
 use account::{format_address, format_private_key, format_public_key, generate_accounts, Account};
-use hashing::{short_hash_tag, Hash};
+use hashing::Hash;
 use merkle::MerkleTree;
 use protocol::{create_membership_proof, verify_membership_proof};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -14,7 +14,6 @@ fn main() {
     // Configuration for the demo run.
     let account_count = 100;
     let seed = 2024u64;
-    let external_nullifier = b"epoch-1-nullifier";
 
     println!("Generating {account_count} dummy Ethereum-style accounts...");
     let accounts = generate_accounts(account_count, seed);
@@ -43,27 +42,21 @@ fn main() {
         format_private_key(&prover_acct.private_key_bytes())
     );
 
-    let merkle_proof = tree
-        .proof(target_index)
-        .expect("proof generation should succeed for valid index");
+    let public_keys: Vec<_> = accounts
+        .iter()
+        .map(|acct| acct.public_key_compressed())
+        .collect();
 
-    let membership_proof = create_membership_proof(
-        prover_acct,
-        merkle_proof,
-        &merkle_root,
-        external_nullifier,
-        &mut rng,
-    );
+    // Bind the ring signature to the set by hashing the Merkle root into the message.
+    let message = merkle_root.as_slice();
+    let membership_proof = create_membership_proof(prover_acct, &public_keys, message, &mut rng);
 
-    let nullifier_hex = hex::encode(membership_proof.zk_proof.nullifier.as_bytes());
-    println!("\nDeterministic nullifier (ties to account + context): 0x{nullifier_hex}");
     println!(
-        "Merkle path length: {} (example hash tag: {})",
-        membership_proof.merkle_proof.path.len(),
-        short_hash_tag(&membership_proof.merkle_proof.leaf)
+        "\nRing signature produced over {} public keys.",
+        public_keys.len()
     );
 
-    let verified = verify_membership_proof(&merkle_root, external_nullifier, &membership_proof);
+    let verified = verify_membership_proof(&public_keys, message, &membership_proof);
     println!(
         "\nVerification result: {}",
         if verified {
@@ -74,7 +67,7 @@ fn main() {
     );
 
     println!("\nHow to scale:");
-    println!("- Swap `account_count` to simulate larger sets; the Merkle tree keeps verifier data small.");
-    println!("- `external_nullifier` can be rotated per epoch to prevent double-use with the deterministic tag.");
-    println!("- The Schnorr-with-nullifier proof stays constant-size regardless of set size.");
+    println!("- Swap `account_count` to simulate larger rings; signature size grows linearly with the ring.");
+    println!("- Bind the signature to additional context by hashing it into `message`.");
+    println!("- For very large sets (millions), use a subset ring or a ZK circuit over the Merkle root to keep proofs small.");
 }

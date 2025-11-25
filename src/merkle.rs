@@ -1,11 +1,13 @@
 use crate::hashing::{hash_pair, Hash};
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MerkleProof {
     pub leaf: Hash,
     pub path: Vec<(Hash, bool)>, // sibling hash, sibling_is_right
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MerkleTree {
     levels: Vec<Vec<Hash>>,
@@ -39,6 +41,7 @@ impl MerkleTree {
         self.levels.last().unwrap()[0]
     }
 
+    #[allow(dead_code)]
     pub fn proof(&self, index: usize) -> Option<MerkleProof> {
         if index >= self.levels.first().map(|lvl| lvl.len()).unwrap_or(0) {
             return None;
@@ -62,6 +65,7 @@ impl MerkleTree {
     }
 }
 
+#[allow(dead_code)]
 pub fn verify_proof(root: &Hash, proof: &MerkleProof) -> bool {
     let mut hash = proof.leaf;
     for (sibling, sibling_is_right) in &proof.path {

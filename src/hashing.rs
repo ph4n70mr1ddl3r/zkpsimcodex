@@ -26,9 +26,3 @@ pub fn keccak256(input: impl AsRef<[u8]>) -> Hash {
     keccak.finalize(&mut output);
     output
 }
-
-/// Convenience for logging: shorten a hash to a readable prefix.
-pub fn short_hash_tag(hash: &Hash) -> String {
-    let encoded = hex::encode(hash);
-    encoded[..8].to_string()
-}

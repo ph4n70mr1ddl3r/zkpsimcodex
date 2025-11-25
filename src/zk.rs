@@ -1,23 +1,20 @@
 use k256::{
-    elliptic_curve::bigint::U256,
-    elliptic_curve::ff::Field,
-    elliptic_curve::ops::Reduce,
-    elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint},
+    elliptic_curve::{
+        bigint::U256,
+        ff::Field,
+        ops::Reduce,
+        sec1::{FromEncodedPoint, ToEncodedPoint},
+    },
     EncodedPoint, FieldBytes, ProjectivePoint, Scalar,
 };
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
 
-use crate::hashing::Hash;
-
+/// Compact Schnorr ring signature proving ownership of one secret key among a set of public keys.
 #[derive(Clone, Debug)]
-pub struct NullifierProof {
-    pub commitment_g: EncodedPoint,
-    pub commitment_h: EncodedPoint,
-    pub response: Scalar,
-    pub challenge: Scalar,
-    pub nullifier: EncodedPoint,
-    pub public_key: EncodedPoint,
+pub struct RingSignature {
+    pub c0: Scalar,
+    pub s: Vec<Scalar>,
 }
 
 fn hash_to_scalar(data: impl AsRef<[u8]>) -> Scalar {
@@ -25,132 +22,84 @@ fn hash_to_scalar(data: impl AsRef<[u8]>) -> Scalar {
     <Scalar as Reduce<U256>>::reduce_bytes(&FieldBytes::from(digest))
 }
 
-fn derive_nullifier_base(
-    public_key: &EncodedPoint,
-    merkle_root: &Hash,
-    leaf: &Hash,
-    context: &[u8],
-) -> ProjectivePoint {
-    let mut transcript = Vec::new();
-    transcript.extend_from_slice(public_key.as_bytes());
-    transcript.extend_from_slice(merkle_root);
-    transcript.extend_from_slice(leaf);
-    transcript.extend_from_slice(context);
-    let scalar = hash_to_scalar(transcript) + Scalar::ONE; // avoid zero
-    ProjectivePoint::GENERATOR * scalar
-}
-
-fn compute_challenge(
-    commitment_g: &EncodedPoint,
-    commitment_h: &EncodedPoint,
-    public_key: &EncodedPoint,
-    nullifier: &EncodedPoint,
-    merkle_root: &Hash,
-    leaf: &Hash,
-    context: &[u8],
-) -> Scalar {
-    let mut transcript = Vec::new();
-    transcript.extend_from_slice(commitment_g.as_bytes());
-    transcript.extend_from_slice(commitment_h.as_bytes());
-    transcript.extend_from_slice(public_key.as_bytes());
-    transcript.extend_from_slice(nullifier.as_bytes());
-    transcript.extend_from_slice(merkle_root);
-    transcript.extend_from_slice(leaf);
-    transcript.extend_from_slice(context);
+fn hash_challenge(message: &[u8], r_point: &ProjectivePoint) -> Scalar {
+    let mut transcript = Vec::with_capacity(message.len() + 33);
+    transcript.extend_from_slice(message);
+    transcript.extend_from_slice(r_point.to_affine().to_encoded_point(true).as_bytes());
     hash_to_scalar(transcript)
 }
 
-/// Generate a Schnorr-style proof of knowledge of `secret` on secp256k1 that also ties in a
-/// deterministic nullifier derived from the same secret and the provided context.
-pub fn prove_with_nullifier(
-    secret: &Scalar,
-    public_key: &EncodedPoint,
-    merkle_root: &Hash,
-    leaf: &Hash,
-    context: &[u8],
+/// Create a non-linkable Schnorr ring signature over secp256k1 public keys.
+/// The signer proves knowledge of the private key corresponding to `public_keys[signer_index]`
+/// without revealing which key is used.
+pub fn ring_sign(
+    message: &[u8],
+    public_keys: &[EncodedPoint],
+    signer_index: usize,
+    secret_scalar: &Scalar,
     rng: &mut StdRng,
-) -> NullifierProof {
-    let nullifier_base = derive_nullifier_base(public_key, merkle_root, leaf, context);
-    let random_scalar = Scalar::random(rng);
+) -> RingSignature {
+    let n = public_keys.len();
+    assert!(n > 1, "ring must contain at least two members");
+    assert!(signer_index < n, "signer index out of bounds");
 
-    let commitment_g = (ProjectivePoint::GENERATOR * random_scalar).to_affine();
-    let commitment_h = (nullifier_base * random_scalar).to_affine();
-    let nullifier_point = (nullifier_base * secret).to_affine();
+    let mut s_values = vec![Scalar::ZERO; n];
+    let mut c_values = vec![Scalar::ZERO; n];
 
-    let challenge = compute_challenge(
-        &commitment_g.to_encoded_point(true),
-        &commitment_h.to_encoded_point(true),
-        public_key,
-        &nullifier_point.to_encoded_point(true),
-        merkle_root,
-        leaf,
-        context,
-    );
+    let k = Scalar::random(&mut *rng);
+    let r_signer = ProjectivePoint::GENERATOR * k;
 
-    let response = random_scalar + (challenge * secret);
+    let start = (signer_index + 1) % n;
+    c_values[start] = hash_challenge(message, &r_signer);
 
-    NullifierProof {
-        commitment_g: commitment_g.to_encoded_point(true),
-        commitment_h: commitment_h.to_encoded_point(true),
-        response,
-        challenge,
-        nullifier: nullifier_point.to_encoded_point(true),
-        public_key: public_key.clone(),
+    // Walk around the ring generating random responses and chained challenges,
+    // skipping the signer position for now.
+    for offset in 0..(n - 1) {
+        let i = (start + offset) % n;
+        let next = (i + 1) % n;
+        if i == signer_index {
+            continue;
+        }
+
+        let pub_point = ProjectivePoint::from_encoded_point(&public_keys[i])
+            .into_option()
+            .expect("public key should decode");
+
+        s_values[i] = Scalar::random(&mut *rng);
+        let r_i = ProjectivePoint::GENERATOR * s_values[i] + (pub_point * (-c_values[i]));
+        c_values[next] = hash_challenge(message, &r_i);
+    }
+
+    // Complete the loop with the signer response.
+    let c_signer = c_values[signer_index];
+    s_values[signer_index] = k + (c_signer * secret_scalar);
+
+    RingSignature {
+        c0: c_values[0],
+        s: s_values,
     }
 }
 
-pub fn verify_with_nullifier(
-    merkle_root: &Hash,
-    leaf: &Hash,
-    context: &[u8],
-    proof: &NullifierProof,
+pub fn ring_verify(
+    message: &[u8],
+    public_keys: &[EncodedPoint],
+    signature: &RingSignature,
 ) -> bool {
-    let public_point = match ProjectivePoint::from_encoded_point(&proof.public_key).into_option() {
-        Some(p) => p,
-        None => return false,
-    };
-    let commitment_g = match ProjectivePoint::from_encoded_point(&proof.commitment_g).into_option()
-    {
-        Some(p) => p,
-        None => return false,
-    };
-    let commitment_h = match ProjectivePoint::from_encoded_point(&proof.commitment_h).into_option()
-    {
-        Some(p) => p,
-        None => return false,
-    };
-    let nullifier_point = match ProjectivePoint::from_encoded_point(&proof.nullifier).into_option()
-    {
-        Some(p) => p,
-        None => return false,
-    };
-
-    let nullifier_base = derive_nullifier_base(&proof.public_key, merkle_root, leaf, context);
-    let expected_challenge = compute_challenge(
-        &proof.commitment_g,
-        &proof.commitment_h,
-        &proof.public_key,
-        &proof.nullifier,
-        merkle_root,
-        leaf,
-        context,
-    );
-
-    if expected_challenge != proof.challenge {
+    let n = public_keys.len();
+    if n == 0 || signature.s.len() != n {
         return false;
     }
 
-    let lhs_g: ProjectivePoint = (ProjectivePoint::GENERATOR * proof.response)
-        .to_affine()
-        .into();
-    let rhs_g: ProjectivePoint = (commitment_g + (public_point * proof.challenge))
-        .to_affine()
-        .into();
+    let mut c = signature.c0;
+    for (s_i, pk_bytes) in signature.s.iter().zip(public_keys.iter()) {
+        let pub_point = match ProjectivePoint::from_encoded_point(pk_bytes).into_option() {
+            Some(p) => p,
+            None => return false,
+        };
 
-    let lhs_h: ProjectivePoint = (nullifier_base * proof.response).to_affine().into();
-    let rhs_h: ProjectivePoint = (commitment_h + (nullifier_point * proof.challenge))
-        .to_affine()
-        .into();
+        let r_i = ProjectivePoint::GENERATOR * s_i + (pub_point * (-c));
+        c = hash_challenge(message, &r_i);
+    }
 
-    lhs_g == rhs_g && lhs_h == rhs_h
+    c == signature.c0
 }
