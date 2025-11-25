@@ -1,4 +1,5 @@
 use sha2::{Digest, Sha256};
+use tiny_keccak::{Hasher, Keccak};
 
 pub type Hash = [u8; 32];
 
@@ -17,9 +18,13 @@ pub fn hash_pair(left: &Hash, right: &Hash) -> Hash {
     hash_bytes(buf)
 }
 
-/// Hash a u64 value in big-endian form.
-pub fn hash_u64(value: u64) -> Hash {
-    hash_bytes(value.to_be_bytes())
+/// Compute Keccak-256 (used for Ethereum-style addresses and leaves).
+pub fn keccak256(input: impl AsRef<[u8]>) -> Hash {
+    let mut keccak = Keccak::v256();
+    let mut output = [0u8; 32];
+    keccak.update(input.as_ref());
+    keccak.finalize(&mut output);
+    output
 }
 
 /// Convenience for logging: shorten a hash to a readable prefix.

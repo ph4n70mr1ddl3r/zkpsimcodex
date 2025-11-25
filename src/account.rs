@@ -1,47 +1,48 @@
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use k256::{elliptic_curve::sec1::ToEncodedPoint, EncodedPoint, PublicKey, Scalar, SecretKey};
+use rand::{rngs::StdRng, SeedableRng};
 
-use crate::{
-    hashing::{hash_bytes, hash_u64, Hash},
-    zk::{derive_public_key, group_scalar_from_bytes},
-};
+use crate::hashing::{keccak256, Hash};
 
-/// Simplified Ethereum-like account used only for demonstration.
-/// Private keys are random 32-byte arrays; public keys are small group elements
-/// derived from the private scalar; addresses are the first 20 bytes of a hash.
+/// Ethereum-style account: secp256k1 keypair and address derived via Keccak-256.
 #[derive(Clone, Debug)]
 pub struct Account {
-    pub private_key: [u8; 32],
-    pub public_key: u64,
+    pub secret_key: SecretKey,
+    pub public_key: PublicKey,
     pub address: [u8; 20],
-    pub leaf: Hash,
-    pub secret_scalar: u64,
+    pub leaf: Hash, // Keccak-256 of the uncompressed public key (Ethereum-style commitment)
+    pub zk_scalar: Scalar, // Same secret as the ECDSA key, reused for the Schnorr proof
 }
 
 impl Account {
     pub fn random(rng: &mut StdRng) -> Self {
-        let mut private_key = [0u8; 32];
-        rng.fill(&mut private_key);
+        let secret_key = SecretKey::random(rng);
+        let public_key: PublicKey = secret_key.public_key();
 
-        let secret_scalar = group_scalar_from_bytes(&private_key);
-        let public_key = derive_public_key(secret_scalar);
+        let uncompressed = public_key.to_encoded_point(false);
+        let pubkey_body = uncompressed.as_bytes()[1..].to_vec(); // drop 0x04 prefix
 
-        let mut address_input = Vec::with_capacity(8 + private_key.len());
-        address_input.extend_from_slice(&public_key.to_be_bytes());
-        address_input.extend_from_slice(&private_key);
-        let address_full = hash_bytes(address_input);
+        let address_hash = keccak256(&pubkey_body);
         let mut address = [0u8; 20];
-        address.copy_from_slice(&address_full[..20]);
+        address.copy_from_slice(&address_hash[12..]);
 
-        // Leaf commits to the public key only; the private key remains hidden.
-        let leaf = hash_u64(public_key);
+        let leaf = keccak256(&pubkey_body);
+        let zk_scalar = *secret_key.to_nonzero_scalar();
 
         Self {
-            private_key,
+            secret_key,
             public_key,
             address,
             leaf,
-            secret_scalar,
+            zk_scalar,
         }
+    }
+
+    pub fn public_key_compressed(&self) -> EncodedPoint {
+        self.public_key.to_encoded_point(true)
+    }
+
+    pub fn private_key_bytes(&self) -> [u8; 32] {
+        self.secret_key.to_bytes().into()
     }
 }
 
@@ -60,6 +61,6 @@ pub fn format_private_key(priv_key: &[u8; 32]) -> String {
     format!("0x{}", hex::encode(priv_key))
 }
 
-pub fn format_public_key(pk: u64) -> String {
-    format!("0x{:016x}", pk)
+pub fn format_public_key(pk: &EncodedPoint) -> String {
+    format!("0x{}", hex::encode(pk.as_bytes()))
 }

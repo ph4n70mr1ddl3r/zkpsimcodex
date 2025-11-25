@@ -7,3 +7,5 @@ edition = "2021"
 rand = "0.8"
 sha2 = "0.10"
 hex = "0.4"
+k256 = { version = "0.13", features = ["arithmetic", "sha256"] }
+tiny-keccak = { version = "2", features = ["keccak"] }

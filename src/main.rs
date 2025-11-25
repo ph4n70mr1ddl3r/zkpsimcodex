@@ -36,11 +36,11 @@ fn main() {
     println!(
         "\nProver controls account #{target_index}: address {}, public key {}",
         format_address(&prover_acct.address),
-        format_public_key(prover_acct.public_key)
+        format_public_key(&prover_acct.public_key_compressed())
     );
     println!(
         "Verifier never sees the private key: {}",
-        format_private_key(&prover_acct.private_key)
+        format_private_key(&prover_acct.private_key_bytes())
     );
 
     let merkle_proof = tree
@@ -55,10 +55,8 @@ fn main() {
         &mut rng,
     );
 
-    println!(
-        "\nDeterministic nullifier (ties to account + context): 0x{:016x}",
-        membership_proof.zk_proof.nullifier
-    );
+    let nullifier_hex = hex::encode(membership_proof.zk_proof.nullifier.as_bytes());
+    println!("\nDeterministic nullifier (ties to account + context): 0x{nullifier_hex}");
     println!(
         "Merkle path length: {} (example hash tag: {})",
         membership_proof.merkle_proof.path.len(),

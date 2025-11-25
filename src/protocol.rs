@@ -1,15 +1,15 @@
+use k256::elliptic_curve::sec1::{FromEncodedPoint, ToEncodedPoint};
 use rand::rngs::StdRng;
 
 use crate::{
     account::Account,
-    hashing::hash_u64,
+    hashing::keccak256,
     merkle::{verify_proof, MerkleProof},
     zk::{prove_with_nullifier, verify_with_nullifier, NullifierProof},
 };
 
 #[derive(Clone, Debug)]
 pub struct MembershipProof {
-    pub public_key: u64,
     pub merkle_proof: MerkleProof,
     pub zk_proof: NullifierProof,
 }
@@ -22,8 +22,8 @@ pub fn create_membership_proof(
     rng: &mut StdRng,
 ) -> MembershipProof {
     let zk_proof = prove_with_nullifier(
-        account.secret_scalar,
-        account.public_key,
+        &account.zk_scalar,
+        &account.public_key_compressed(),
         merkle_root,
         &merkle_proof.leaf,
         external_nullifier,
@@ -31,7 +31,6 @@ pub fn create_membership_proof(
     );
 
     MembershipProof {
-        public_key: account.public_key,
         merkle_proof,
         zk_proof,
     }
@@ -42,8 +41,17 @@ pub fn verify_membership_proof(
     external_nullifier: &[u8],
     proof: &MembershipProof,
 ) -> bool {
-    let expected_leaf = hash_u64(proof.public_key);
-    if proof.merkle_proof.leaf != expected_leaf {
+    // Ensure the supplied public key matches the committed Merkle leaf.
+    if let Some(pub_point) =
+        k256::ProjectivePoint::from_encoded_point(&proof.zk_proof.public_key).into_option()
+    {
+        let uncompressed = pub_point.to_affine().to_encoded_point(false);
+        let pub_bytes = &uncompressed.as_bytes()[1..]; // strip 0x04 prefix
+        let expected_leaf = keccak256(pub_bytes);
+        if proof.merkle_proof.leaf != expected_leaf {
+            return false;
+        }
+    } else {
         return false;
     }
 
@@ -52,7 +60,6 @@ pub fn verify_membership_proof(
     }
 
     verify_with_nullifier(
-        proof.public_key,
         merkle_root,
         &proof.merkle_proof.leaf,
         external_nullifier,
