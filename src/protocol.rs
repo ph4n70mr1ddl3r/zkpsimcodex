@@ -54,7 +54,6 @@ pub fn create_membership_proof(
 /// * `public_keys` - The set of public keys
 /// * `message` - The message the proof was bound to
 /// * `proof` - The membership proof to verify
-#[must_use]
 pub fn verify_membership_proof(
     public_keys: &[k256::EncodedPoint],
     message: &[u8],

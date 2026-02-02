@@ -6,6 +6,7 @@ pub type Hash = [u8; 32];
 const HASH_SIZE: usize = 32;
 
 /// Hash arbitrary bytes into a 32-byte digest using SHA-256.
+#[allow(dead_code)]
 pub fn hash_bytes(input: impl AsRef<[u8]>) -> Hash {
     let mut hasher = Sha256::new();
     hasher.update(input);

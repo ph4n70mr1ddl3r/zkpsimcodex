@@ -16,13 +16,10 @@ const DEFAULT_SEED: u64 = 2024;
 const SEED_OFFSET: u64 = 99;
 
 fn main() {
-    let account_count = DEFAULT_ACCOUNT_COUNT;
     let seed = DEFAULT_SEED;
 
-    assert!(account_count > 0, "account_count must be positive");
-
-    println!("Generating {account_count} dummy Ethereum-style accounts...");
-    let accounts = generate_accounts(account_count, seed);
+    println!("Generating {DEFAULT_ACCOUNT_COUNT} dummy Ethereum-style accounts...");
+    let accounts = generate_accounts(DEFAULT_ACCOUNT_COUNT, seed);
     let leaves: Vec<Hash> = accounts.iter().map(|acct| acct.leaf).collect();
 
     println!(
@@ -34,7 +31,7 @@ fn main() {
     println!("Merkle root: 0x{}", hex::encode(merkle_root));
 
     let mut rng = StdRng::seed_from_u64(seed + SEED_OFFSET);
-    let target_index = rng.gen_range(0..account_count);
+    let target_index = rng.gen_range(0..DEFAULT_ACCOUNT_COUNT);
     let prover_acct: &Account = &accounts[target_index];
 
     println!(

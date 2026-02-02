@@ -11,7 +11,6 @@ use k256::{
 };
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
 
 const MIN_RING_SIZE: usize = 2;
 const CHALLENGE_PREFIX: &[u8] = b"zkpsimcodex-ring-challenge";
@@ -67,7 +66,6 @@ fn validate_public_key(pk_bytes: &EncodedPoint) -> Result<ProjectivePoint> {
 /// # Errors
 /// Returns an error if the ring has fewer than 2 members, if signer_index is out of bounds,
 /// or if any public key is invalid.
-#[must_use]
 pub fn ring_sign(
     message: &[u8],
     public_keys: &[EncodedPoint],
@@ -82,8 +80,10 @@ pub fn ring_sign(
     if signer_index >= n {
         return Err(ZkpError::InvalidSignerIndex(signer_index, n));
     }
-    if public_keys.len() != public_keys.iter().collect::<HashSet<_>>().len() {
-        return Err(ZkpError::DuplicatePublicKey);
+    for (i, pk) in public_keys.iter().enumerate() {
+        if public_keys[..i].contains(pk) {
+            return Err(ZkpError::DuplicatePublicKey);
+        }
     }
     if secret_scalar == &Scalar::ZERO {
         return Err(ZkpError::InvalidSecretKey);

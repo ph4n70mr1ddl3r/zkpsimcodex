@@ -34,13 +34,12 @@ impl Account {
         let mut address = [0u8; ADDRESS_SIZE];
         address.copy_from_slice(&address_hash[ADDRESS_OFFSET..]);
 
-        let leaf = keccak256(pubkey_body);
         let zk_scalar = *secret_key.to_nonzero_scalar();
 
         Self {
             public_key,
             address,
-            leaf,
+            leaf: address_hash,
             zk_scalar,
         }
     }
@@ -152,7 +151,15 @@ mod tests {
         let account = Account::random(&mut rng);
         let compressed = account.public_key_compressed();
         let bytes = compressed.as_bytes();
-        assert_eq!(bytes[0], 0x02 | 0x03);
-        assert_eq!(bytes.len(), 33);
+        let prefix = bytes[0];
+        assert!(
+            prefix == 0x02 || prefix == 0x03,
+            "Compressed key prefix must be 0x02 or 0x03"
+        );
+        assert_eq!(
+            bytes.len(),
+            33,
+            "Compressed SEC1 encoding should be 33 bytes"
+        );
     }
 }
