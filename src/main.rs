@@ -4,7 +4,7 @@ mod merkle;
 mod protocol;
 mod zk;
 
-use account::{format_address, format_private_key, format_public_key, generate_accounts, Account};
+use account::{format_address, format_public_key, generate_accounts, Account};
 use hashing::Hash;
 use merkle::MerkleTree;
 use protocol::{create_membership_proof, verify_membership_proof};
@@ -37,10 +37,7 @@ fn main() {
         format_address(&prover_acct.address),
         format_public_key(&prover_acct.public_key_compressed())
     );
-    println!(
-        "Verifier never sees the private key: {}",
-        format_private_key(&prover_acct.private_key_bytes())
-    );
+    println!("Verifier never sees the private key.");
 
     let public_keys: Vec<_> = accounts
         .iter()

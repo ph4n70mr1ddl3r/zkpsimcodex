@@ -5,11 +5,28 @@ use crate::{
     zk::{ring_sign, ring_verify, RingSignature},
 };
 
+/// A proof of membership in a set, using a ring signature.
+///
+/// The prover can demonstrate they own one of the accounts in the set
+/// without revealing which one.
 #[derive(Clone, Debug)]
 pub struct MembershipProof {
     pub signature: RingSignature,
 }
 
+/// Create a membership proof for an account.
+///
+/// Creates a ring signature proving the account owns one of the keys in the set
+/// without revealing which one.
+///
+/// # Arguments
+/// * `account` - The account creating the proof
+/// * `public_keys` - The set of public keys
+/// * `message` - The message to bind the signature to
+/// * `rng` - Random number generator
+///
+/// # Panics
+/// Panics if the account's public key is not in the provided set.
 pub fn create_membership_proof(
     account: &Account,
     public_keys: &[k256::EncodedPoint],
@@ -27,6 +44,14 @@ pub fn create_membership_proof(
     MembershipProof { signature }
 }
 
+/// Verify a membership proof.
+///
+/// Returns true if the proof is valid for the given message and public keys.
+///
+/// # Arguments
+/// * `public_keys` - The set of public keys
+/// * `message` - The message the proof was bound to
+/// * `proof` - The membership proof to verify
 pub fn verify_membership_proof(
     public_keys: &[k256::EncodedPoint],
     message: &[u8],

@@ -4,6 +4,7 @@ use k256::{
         ff::Field,
         ops::Reduce,
         sec1::{FromEncodedPoint, ToEncodedPoint},
+        Group,
     },
     EncodedPoint, FieldBytes, ProjectivePoint, Scalar,
 };
@@ -11,6 +12,10 @@ use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
 
 /// Compact Schnorr ring signature proving ownership of one secret key among a set of public keys.
+///
+/// The signature consists of an initial challenge and a vector of scalar responses,
+/// one for each public key in the ring. The verifier cannot determine which key
+/// was used to create the signature.
 #[derive(Clone, Debug)]
 pub struct RingSignature {
     pub c0: Scalar,
@@ -23,15 +28,35 @@ fn hash_to_scalar(data: impl AsRef<[u8]>) -> Scalar {
 }
 
 fn hash_challenge(message: &[u8], r_point: &ProjectivePoint) -> Scalar {
-    let mut transcript = Vec::with_capacity(message.len() + 33);
+    let mut transcript = Vec::with_capacity(message.len() + 33 + 16);
+    transcript.extend_from_slice(b"zkpsimcodex-ring-challenge");
     transcript.extend_from_slice(message);
     transcript.extend_from_slice(r_point.to_affine().to_encoded_point(true).as_bytes());
     hash_to_scalar(transcript)
 }
 
+fn validate_public_key(pk_bytes: &EncodedPoint) -> Option<ProjectivePoint> {
+    let point = ProjectivePoint::from_encoded_point(pk_bytes).into_option()?;
+    if point.is_identity().into() {
+        return None;
+    }
+    Some(point)
+}
+
 /// Create a non-linkable Schnorr ring signature over secp256k1 public keys.
+///
 /// The signer proves knowledge of the private key corresponding to `public_keys[signer_index]`
 /// without revealing which key is used.
+///
+/// # Arguments
+/// * `message` - The message being signed
+/// * `public_keys` - The ring of public keys (must contain at least 2 keys)
+/// * `signer_index` - Index of the signer's public key in the ring
+/// * `secret_scalar` - The signer's private key scalar
+/// * `rng` - Random number generator
+///
+/// # Panics
+/// Panics if the ring has fewer than 2 members or if signer_index is out of bounds.
 pub fn ring_sign(
     message: &[u8],
     public_keys: &[EncodedPoint],
@@ -61,9 +86,7 @@ pub fn ring_sign(
             continue;
         }
 
-        let pub_point = ProjectivePoint::from_encoded_point(&public_keys[i])
-            .into_option()
-            .expect("public key should decode");
+        let pub_point = validate_public_key(&public_keys[i]).expect("public key should be valid");
 
         s_values[i] = Scalar::random(&mut *rng);
         let r_i = ProjectivePoint::GENERATOR * s_values[i] + (pub_point * (-c_values[i]));
@@ -80,6 +103,15 @@ pub fn ring_sign(
     }
 }
 
+/// Verify a Schnorr ring signature.
+///
+/// Returns true if the signature is valid for the given message and public keys,
+/// false otherwise.
+///
+/// # Arguments
+/// * `message` - The message that was signed
+/// * `public_keys` - The ring of public keys used to create the signature
+/// * `signature` - The ring signature to verify
 pub fn ring_verify(
     message: &[u8],
     public_keys: &[EncodedPoint],
@@ -92,7 +124,7 @@ pub fn ring_verify(
 
     let mut c = signature.c0;
     for (s_i, pk_bytes) in signature.s.iter().zip(public_keys.iter()) {
-        let pub_point = match ProjectivePoint::from_encoded_point(pk_bytes).into_option() {
+        let pub_point = match validate_public_key(pk_bytes) {
             Some(p) => p,
             None => return false,
         };
