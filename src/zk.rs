@@ -61,6 +61,11 @@ fn validate_public_key(pk_bytes: &EncodedPoint) -> Result<ProjectivePoint> {
 /// The signer proves knowledge of the private key corresponding to `public_keys[signer_index]`
 /// without revealing which key is used.
 ///
+/// # Security Notes
+/// - The random number generator must be cryptographically secure
+/// - The same secret scalar must not be reused across different signatures
+/// - The nonce `k` must be unique for each signature to prevent private key exposure
+///
 /// # Arguments
 /// * `message` - The message being signed
 /// * `public_keys` - The ring of public keys (must contain at least 2 keys)
@@ -132,6 +137,11 @@ pub fn ring_sign(
 ///
 /// Returns true if the signature is valid for the given message and public keys,
 /// false otherwise.
+///
+/// # Security Notes
+/// - This function performs constant-time comparison to prevent timing attacks
+/// - Verification must be performed with the exact same public keys used during signing
+/// - The message must be identical to the one that was signed
 ///
 /// # Arguments
 /// * `message` - The message that was signed

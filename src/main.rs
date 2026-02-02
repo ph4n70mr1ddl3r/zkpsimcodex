@@ -50,19 +50,18 @@ fn run_workflow(account_count: usize, seed: u64) -> Result<(), Box<dyn std::erro
     let verified = verify_membership_proof(&public_keys, message, &membership_proof)?;
 
     if !verified {
-        return Err("Verification failed".into());
+        return Err("Membership proof verification failed - proof is invalid".into());
     }
 
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seed = DEFAULT_SEED;
 
     println!("Generating {DEFAULT_ACCOUNT_COUNT} dummy Ethereum-style accounts...");
     let (accounts, merkle_root, target_index, membership_proof) =
-        create_tree_and_proof(DEFAULT_ACCOUNT_COUNT, seed)
-            .expect("Failed to create tree and proof");
+        create_tree_and_proof(DEFAULT_ACCOUNT_COUNT, seed)?;
 
     println!("Merkle root: 0x{}", hex::encode(merkle_root));
 
@@ -85,8 +84,7 @@ fn main() {
     );
 
     let message = merkle_root.as_slice();
-    let verified = verify_membership_proof(&public_keys, message, &membership_proof)
-        .expect("verification failed");
+    let verified = verify_membership_proof(&public_keys, message, &membership_proof)?;
     println!(
         "\nVerification result: {}",
         if verified {
@@ -100,6 +98,8 @@ fn main() {
     println!("- Swap `account_count` to simulate larger rings; signature size grows linearly with the ring.");
     println!("- Bind the signature to additional context by hashing it into `message`.");
     println!("- For very large sets (millions), use a subset ring or a ZK circuit over the Merkle root to keep proofs small.");
+
+    Ok(())
 }
 
 #[cfg(test)]
