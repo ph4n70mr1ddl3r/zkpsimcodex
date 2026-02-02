@@ -3,6 +3,9 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use crate::hashing::{keccak256, Hash};
 
+const ADDRESS_SIZE: usize = 20;
+const ADDRESS_OFFSET: usize = 12;
+
 /// Ethereum-style account: secp256k1 keypair and address derived via Keccak-256.
 ///
 /// Contains the secret and public keys, Ethereum address, and the Merkle tree leaf
@@ -28,8 +31,8 @@ impl Account {
         let pubkey_body = uncompressed.as_bytes()[1..].to_vec();
 
         let address_hash = keccak256(&pubkey_body);
-        let mut address = [0u8; 20];
-        address.copy_from_slice(&address_hash[12..]);
+        let mut address = [0u8; ADDRESS_SIZE];
+        address.copy_from_slice(&address_hash[ADDRESS_OFFSET..]);
 
         let leaf = keccak256(&pubkey_body);
         let zk_scalar = *secret_key.to_nonzero_scalar();
@@ -65,11 +68,12 @@ pub fn generate_accounts(count: usize, seed: u64) -> Vec<Account> {
     accounts
 }
 
-/// Format helpers for human-readable output.
-pub fn format_address(addr: &[u8; 20]) -> String {
+/// Format an Ethereum address for human-readable output.
+pub fn format_address(addr: &[u8; ADDRESS_SIZE]) -> String {
     format!("0x{}", hex::encode(addr))
 }
 
+/// Format a public key for human-readable output.
 pub fn format_public_key(pk: &EncodedPoint) -> String {
     format!("0x{}", hex::encode(pk.as_bytes()))
 }

@@ -11,6 +11,9 @@ use k256::{
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
 
+const MIN_RING_SIZE: usize = 2;
+const CHALLENGE_PREFIX: &[u8] = b"zkpsimcodex-ring-challenge";
+
 /// Compact Schnorr ring signature proving ownership of one secret key among a set of public keys.
 ///
 /// The signature consists of an initial challenge and a vector of scalar responses,
@@ -28,16 +31,18 @@ fn hash_to_scalar(data: impl AsRef<[u8]>) -> Scalar {
 }
 
 fn hash_challenge(message: &[u8], r_point: &ProjectivePoint) -> Scalar {
-    let mut transcript = Vec::with_capacity(message.len() + 33 + 16);
-    transcript.extend_from_slice(b"zkpsimcodex-ring-challenge");
+    let encoded_point = r_point.to_affine().to_encoded_point(true);
+    let mut transcript =
+        Vec::with_capacity(CHALLENGE_PREFIX.len() + message.len() + encoded_point.as_bytes().len());
+    transcript.extend_from_slice(CHALLENGE_PREFIX);
     transcript.extend_from_slice(message);
-    transcript.extend_from_slice(r_point.to_affine().to_encoded_point(true).as_bytes());
+    transcript.extend_from_slice(encoded_point.as_bytes());
     hash_to_scalar(transcript)
 }
 
 fn validate_public_key(pk_bytes: &EncodedPoint) -> Option<ProjectivePoint> {
     let point = ProjectivePoint::from_encoded_point(pk_bytes).into_option()?;
-    if point.is_identity().into() {
+    if bool::from(point.is_identity()) {
         return None;
     }
     Some(point)
@@ -65,7 +70,7 @@ pub fn ring_sign(
     rng: &mut StdRng,
 ) -> RingSignature {
     let n = public_keys.len();
-    assert!(n > 1, "ring must contain at least two members");
+    assert!(n >= MIN_RING_SIZE, "ring must contain at least two members");
     assert!(signer_index < n, "signer index out of bounds");
 
     let mut s_values = vec![Scalar::ZERO; n];
@@ -86,7 +91,8 @@ pub fn ring_sign(
             continue;
         }
 
-        let pub_point = validate_public_key(&public_keys[i]).expect("public key should be valid");
+        let pub_point =
+            validate_public_key(&public_keys[i]).expect("all public keys must be valid");
 
         s_values[i] = Scalar::random(&mut *rng);
         let r_i = ProjectivePoint::GENERATOR * s_values[i] + (pub_point * (-c_values[i]));

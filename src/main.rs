@@ -10,10 +10,13 @@ use merkle::MerkleTree;
 use protocol::{create_membership_proof, verify_membership_proof};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
+const DEFAULT_ACCOUNT_COUNT: usize = 100;
+const DEFAULT_SEED: u64 = 2024;
+const SEED_OFFSET: u64 = 99;
+
 fn main() {
-    // Configuration for the demo run.
-    let account_count = 100;
-    let seed = 2024u64;
+    let account_count = DEFAULT_ACCOUNT_COUNT;
+    let seed = DEFAULT_SEED;
 
     println!("Generating {account_count} dummy Ethereum-style accounts...");
     let accounts = generate_accounts(account_count, seed);
@@ -27,8 +30,7 @@ fn main() {
     let merkle_root = tree.root();
     println!("Merkle root: 0x{}", hex::encode(merkle_root));
 
-    // Select a prover at random to demonstrate anonymity from the verifier's perspective.
-    let mut rng = StdRng::seed_from_u64(seed + 99);
+    let mut rng = StdRng::seed_from_u64(seed + SEED_OFFSET);
     let target_index = rng.gen_range(0..account_count);
     let prover_acct: &Account = &accounts[target_index];
 

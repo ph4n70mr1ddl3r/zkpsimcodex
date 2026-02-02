@@ -37,7 +37,7 @@ pub fn create_membership_proof(
     let signer_index = public_keys
         .iter()
         .position(|pk| pk == &signer_pk)
-        .expect("signer public key must be in the provided set");
+        .expect("signer's public key must be present in the public keys set");
 
     let signature = ring_sign(message, public_keys, signer_index, &account.zk_scalar, rng);
 
