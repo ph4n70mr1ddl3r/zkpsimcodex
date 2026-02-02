@@ -29,7 +29,7 @@ fn create_tree_and_proof(account_count: usize, seed: u64) -> ProofResult {
 
     let public_keys: Vec<_> = accounts
         .iter()
-        .map(|acct| acct.public_key_compressed())
+        .map(Account::public_key_compressed)
         .collect();
 
     let message = merkle_root.as_slice();
@@ -43,7 +43,7 @@ fn run_workflow(account_count: usize, seed: u64) -> Result<(), Box<dyn std::erro
     let (accounts, merkle_root, _, membership_proof) = create_tree_and_proof(account_count, seed)?;
     let public_keys: Vec<_> = accounts
         .iter()
-        .map(|acct| acct.public_key_compressed())
+        .map(Account::public_key_compressed)
         .collect();
 
     let message = merkle_root.as_slice();
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let public_keys: Vec<_> = accounts
         .iter()
-        .map(|acct| acct.public_key_compressed())
+        .map(Account::public_key_compressed)
         .collect();
 
     println!(

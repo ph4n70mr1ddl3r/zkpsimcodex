@@ -74,7 +74,7 @@ fn validate_public_key(pk_bytes: &EncodedPoint) -> Result<ProjectivePoint> {
 /// * `rng` - Random number generator
 ///
 /// # Errors
-/// Returns an error if the ring has fewer than 2 members, if signer_index is out of bounds,
+/// Returns an error if the ring has fewer than 2 members, if `signer_index` is out of bounds,
 /// or if any public key is invalid.
 pub fn ring_sign(
     message: &[u8],
@@ -165,9 +165,8 @@ pub fn ring_verify(
 
     let mut c = signature.c0;
     for (s_i, pk_bytes) in signature.s.iter().zip(public_keys.iter()) {
-        let pub_point = match validate_public_key(pk_bytes) {
-            Ok(p) => p,
-            Err(_) => return Ok(false),
+        let Ok(pub_point) = validate_public_key(pk_bytes) else {
+            return Ok(false);
         };
 
         let r_i = ProjectivePoint::GENERATOR * s_i + (pub_point * (-c));
