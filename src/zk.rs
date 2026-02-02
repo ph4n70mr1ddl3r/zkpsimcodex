@@ -11,6 +11,7 @@ use k256::{
 };
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 const MIN_RING_SIZE: usize = 2;
 const CHALLENGE_PREFIX: &[u8] = b"zkpsimcodex-ring-challenge";
@@ -83,10 +84,9 @@ pub fn ring_sign(
     if signer_index >= n {
         return Err(ZkpError::InvalidSignerIndex(signer_index, n));
     }
-    for (i, pk) in public_keys.iter().enumerate() {
-        if public_keys[..i].contains(pk) {
-            return Err(ZkpError::DuplicatePublicKey);
-        }
+    let unique_keys: HashSet<_> = public_keys.iter().collect();
+    if unique_keys.len() != n {
+        return Err(ZkpError::DuplicatePublicKey);
     }
     if secret_scalar == &Scalar::ZERO {
         return Err(ZkpError::InvalidSecretKey);

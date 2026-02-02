@@ -15,7 +15,8 @@ impl MerkleTree {
     /// Create a Merkle tree from the given leaf hashes.
     ///
     /// Leaves are padded to the next power of two with zero hashes to ensure
-    /// a deterministic layout.
+    /// a deterministic layout. An empty leaf list will result in a tree with
+    /// a single zero hash as the root.
     ///
     /// # Arguments
     /// * `leaves` - The leaf hashes to build the tree from
