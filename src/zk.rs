@@ -1,3 +1,4 @@
+use crate::error::{Result, ZkpError};
 use k256::{
     elliptic_curve::{
         bigint::U256,
@@ -40,12 +41,14 @@ fn hash_challenge(message: &[u8], r_point: &ProjectivePoint) -> Scalar {
     hash_to_scalar(transcript)
 }
 
-fn validate_public_key(pk_bytes: &EncodedPoint) -> Option<ProjectivePoint> {
-    let point = ProjectivePoint::from_encoded_point(pk_bytes).into_option()?;
+fn validate_public_key(pk_bytes: &EncodedPoint) -> Result<ProjectivePoint> {
+    let point = ProjectivePoint::from_encoded_point(pk_bytes)
+        .into_option()
+        .ok_or(ZkpError::InvalidPublicKey)?;
     if bool::from(point.is_identity()) {
-        return None;
+        return Err(ZkpError::InvalidPublicKey);
     }
-    Some(point)
+    Ok(point)
 }
 
 /// Create a non-linkable Schnorr ring signature over secp256k1 public keys.
@@ -60,18 +63,23 @@ fn validate_public_key(pk_bytes: &EncodedPoint) -> Option<ProjectivePoint> {
 /// * `secret_scalar` - The signer's private key scalar
 /// * `rng` - Random number generator
 ///
-/// # Panics
-/// Panics if the ring has fewer than 2 members or if signer_index is out of bounds.
+/// # Errors
+/// Returns an error if the ring has fewer than 2 members, if signer_index is out of bounds,
+/// or if any public key is invalid.
 pub fn ring_sign(
     message: &[u8],
     public_keys: &[EncodedPoint],
     signer_index: usize,
     secret_scalar: &Scalar,
     rng: &mut StdRng,
-) -> RingSignature {
+) -> Result<RingSignature> {
     let n = public_keys.len();
-    assert!(n >= MIN_RING_SIZE, "ring must contain at least two members");
-    assert!(signer_index < n, "signer index out of bounds");
+    if n < MIN_RING_SIZE {
+        return Err(ZkpError::InvalidRingSize(MIN_RING_SIZE));
+    }
+    if signer_index >= n {
+        return Err(ZkpError::InvalidSignerIndex(signer_index, n));
+    }
 
     let mut s_values = vec![Scalar::ZERO; n];
     let mut c_values = vec![Scalar::ZERO; n];
@@ -91,8 +99,7 @@ pub fn ring_sign(
             continue;
         }
 
-        let pub_point =
-            validate_public_key(&public_keys[i]).expect("all public keys must be valid");
+        let pub_point = validate_public_key(&public_keys[i])?;
 
         s_values[i] = Scalar::random(&mut *rng);
         let r_i = ProjectivePoint::GENERATOR * s_values[i] + (pub_point * (-c_values[i]));
@@ -103,10 +110,10 @@ pub fn ring_sign(
     let c_signer = c_values[signer_index];
     s_values[signer_index] = k + (c_signer * secret_scalar);
 
-    RingSignature {
+    Ok(RingSignature {
         c0: c_values[0],
         s: s_values,
-    }
+    })
 }
 
 /// Verify a Schnorr ring signature.
@@ -132,8 +139,8 @@ pub fn ring_verify(
     let mut c = signature.c0;
     for (s_i, pk_bytes) in signature.s.iter().zip(public_keys.iter()) {
         let pub_point = match validate_public_key(pk_bytes) {
-            Some(p) => p,
-            None => return false,
+            Ok(p) => p,
+            Err(_) => return false,
         };
 
         let r_i = ProjectivePoint::GENERATOR * s_i + (pub_point * (-c));
@@ -141,4 +148,108 @@ pub fn ring_verify(
     }
 
     c == signature.c0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use k256::SecretKey;
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_ring_sign_verify() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let secret_key = SecretKey::random(&mut rng);
+        let public_key = secret_key.public_key();
+
+        let mut public_keys = vec![public_key.to_encoded_point(true)];
+        for _ in 0..4 {
+            let sk = SecretKey::random(&mut rng);
+            public_keys.push(sk.public_key().to_encoded_point(true));
+        }
+
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"test message";
+
+        let signature = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng).unwrap();
+        assert!(ring_verify(message, &public_keys, &signature));
+
+        assert!(!ring_verify(b"wrong message", &public_keys, &signature));
+    }
+
+    #[test]
+    fn test_ring_sign_verify_different_signer() {
+        let mut rng = StdRng::seed_from_u64(123);
+        let mut secret_keys = Vec::new();
+        let mut public_keys = Vec::new();
+
+        for _ in 0..5 {
+            let sk = SecretKey::random(&mut rng);
+            public_keys.push(sk.public_key().to_encoded_point(true));
+            secret_keys.push(sk);
+        }
+
+        let signer_index = 2;
+        let secret_scalar = *secret_keys[signer_index].to_nonzero_scalar();
+        let message = b"test message";
+
+        let signature = ring_sign(
+            message,
+            &public_keys,
+            signer_index,
+            &secret_scalar,
+            &mut rng,
+        )
+        .unwrap();
+        assert!(ring_verify(message, &public_keys, &signature));
+    }
+
+    #[test]
+    fn test_ring_sign_min_ring_size() {
+        let mut rng = StdRng::seed_from_u64(999);
+        let secret_key = SecretKey::random(&mut rng);
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"test message";
+
+        let public_keys = vec![
+            secret_key.public_key().to_encoded_point(true),
+            SecretKey::random(&mut rng)
+                .public_key()
+                .to_encoded_point(true),
+        ];
+
+        let signature = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng).unwrap();
+        assert!(ring_verify(message, &public_keys, &signature));
+    }
+
+    #[test]
+    fn test_ring_sign_invalid_ring_size() {
+        let mut rng = StdRng::seed_from_u64(777);
+        let secret_key = SecretKey::random(&mut rng);
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"test message";
+
+        let public_keys = vec![secret_key.public_key().to_encoded_point(true)];
+
+        let result = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng);
+        assert!(matches!(result, Err(ZkpError::InvalidRingSize(_))));
+    }
+
+    #[test]
+    fn test_ring_sign_invalid_signer_index() {
+        let mut rng = StdRng::seed_from_u64(888);
+        let secret_key = SecretKey::random(&mut rng);
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"test message";
+
+        let public_keys = vec![
+            secret_key.public_key().to_encoded_point(true),
+            SecretKey::random(&mut rng)
+                .public_key()
+                .to_encoded_point(true),
+        ];
+
+        let result = ring_sign(message, &public_keys, 5, &secret_scalar, &mut rng);
+        assert!(matches!(result, Err(ZkpError::InvalidSignerIndex(_, _))));
+    }
 }

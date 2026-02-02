@@ -52,3 +52,48 @@ impl MerkleTree {
             .unwrap_or(ZERO_HASH)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_merkle_tree_single_leaf() {
+        let leaf = [1u8; 32];
+        let tree = MerkleTree::from_leaves(vec![leaf]);
+        let root = tree.root();
+        assert_ne!(root, ZERO_HASH);
+    }
+
+    #[test]
+    fn test_merkle_tree_two_leaves() {
+        let leaves = vec![[1u8; 32], [2u8; 32]];
+        let tree = MerkleTree::from_leaves(leaves.clone());
+        let root = tree.root();
+        assert_ne!(root, ZERO_HASH);
+        assert_ne!(root, leaves[0]);
+        assert_ne!(root, leaves[1]);
+    }
+
+    #[test]
+    fn test_merkle_tree_deterministic() {
+        let leaves = vec![[1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]];
+        let tree1 = MerkleTree::from_leaves(leaves.clone());
+        let tree2 = MerkleTree::from_leaves(leaves);
+        assert_eq!(tree1.root(), tree2.root());
+    }
+
+    #[test]
+    fn test_merkle_tree_padding() {
+        let leaves = vec![[1u8; 32]];
+        let tree = MerkleTree::from_leaves(leaves);
+        assert_eq!(tree.levels.len(), 1);
+        assert_eq!(tree.levels[0].len(), 1);
+    }
+
+    #[test]
+    fn test_merkle_tree_empty() {
+        let tree = MerkleTree::from_leaves(vec![]);
+        assert_eq!(tree.root(), ZERO_HASH);
+    }
+}

@@ -28,13 +28,13 @@ impl Account {
         let public_key: PublicKey = secret_key.public_key();
 
         let uncompressed = public_key.to_encoded_point(false);
-        let pubkey_body = uncompressed.as_bytes()[1..].to_vec();
+        let pubkey_body = &uncompressed.as_bytes()[1..];
 
-        let address_hash = keccak256(&pubkey_body);
+        let address_hash = keccak256(pubkey_body);
         let mut address = [0u8; ADDRESS_SIZE];
         address.copy_from_slice(&address_hash[ADDRESS_OFFSET..]);
 
-        let leaf = keccak256(&pubkey_body);
+        let leaf = keccak256(pubkey_body);
         let zk_scalar = *secret_key.to_nonzero_scalar();
 
         Self {
@@ -76,4 +76,72 @@ pub fn format_address(addr: &[u8; ADDRESS_SIZE]) -> String {
 /// Format a public key for human-readable output.
 pub fn format_public_key(pk: &EncodedPoint) -> String {
     format!("0x{}", hex::encode(pk.as_bytes()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_account_generation_deterministic() {
+        let mut rng1 = StdRng::seed_from_u64(42);
+        let mut rng2 = StdRng::seed_from_u64(42);
+
+        let acct1 = Account::random(&mut rng1);
+        let acct2 = Account::random(&mut rng2);
+
+        assert_eq!(acct1.address, acct2.address);
+        assert_eq!(acct1.leaf, acct2.leaf);
+        assert_eq!(acct1.zk_scalar, acct2.zk_scalar);
+    }
+
+    #[test]
+    fn test_account_generation_different() {
+        let mut rng = StdRng::seed_from_u64(42);
+
+        let acct1 = Account::random(&mut rng);
+        let acct2 = Account::random(&mut rng);
+
+        assert_ne!(acct1.address, acct2.address);
+        assert_ne!(acct1.leaf, acct2.leaf);
+        assert_ne!(acct1.zk_scalar, acct2.zk_scalar);
+    }
+
+    #[test]
+    fn test_generate_accounts_count() {
+        let accounts = generate_accounts(10, 42);
+        assert_eq!(accounts.len(), 10);
+    }
+
+    #[test]
+    fn test_generate_accounts_deterministic() {
+        let accounts1 = generate_accounts(5, 42);
+        let accounts2 = generate_accounts(5, 42);
+
+        assert_eq!(accounts1.len(), accounts2.len());
+        for (a1, a2) in accounts1.iter().zip(accounts2.iter()) {
+            assert_eq!(a1.address, a2.address);
+            assert_eq!(a1.leaf, a2.leaf);
+        }
+    }
+
+    #[test]
+    fn test_format_address() {
+        let addr = [
+            1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        ];
+        let formatted = format_address(&addr);
+        assert!(formatted.starts_with("0x"));
+        assert_eq!(formatted.len(), 42);
+    }
+
+    #[test]
+    fn test_public_key_compressed() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let account = Account::random(&mut rng);
+        let compressed = account.public_key_compressed();
+        let bytes = compressed.as_bytes();
+        assert_eq!(bytes[0], 0x02 | 0x03);
+        assert_eq!(bytes.len(), 33);
+    }
 }

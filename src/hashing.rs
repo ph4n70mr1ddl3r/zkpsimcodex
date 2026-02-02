@@ -32,3 +32,65 @@ pub fn keccak256(input: impl AsRef<[u8]>) -> Hash {
     keccak.finalize(&mut output);
     output
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_bytes_deterministic() {
+        let data = b"test data";
+        let hash1 = hash_bytes(data);
+        let hash2 = hash_bytes(data);
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_bytes_different() {
+        let hash1 = hash_bytes(b"data1");
+        let hash2 = hash_bytes(b"data2");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_pair_deterministic() {
+        let left = [1u8; 32];
+        let right = [2u8; 32];
+        let hash1 = hash_pair(&left, &right);
+        let hash2 = hash_pair(&left, &right);
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_pair_order_matters() {
+        let left = [1u8; 32];
+        let right = [2u8; 32];
+        let hash1 = hash_pair(&left, &right);
+        let hash2 = hash_pair(&right, &left);
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_keccak256_deterministic() {
+        let data = b"test data";
+        let hash1 = keccak256(data);
+        let hash2 = keccak256(data);
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_keccak256_different_from_sha256() {
+        let data = b"test data";
+        let sha_hash = hash_bytes(data);
+        let keccak_hash = keccak256(data);
+        assert_ne!(sha_hash, keccak_hash);
+    }
+
+    #[test]
+    fn test_hash_size() {
+        let hash = hash_bytes(b"test");
+        assert_eq!(hash.len(), HASH_SIZE);
+        let keccak = keccak256(b"test");
+        assert_eq!(keccak.len(), HASH_SIZE);
+    }
+}

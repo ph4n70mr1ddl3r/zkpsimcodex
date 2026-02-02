@@ -1,4 +1,5 @@
 mod account;
+mod error;
 mod hashing;
 mod merkle;
 mod protocol;
@@ -48,7 +49,8 @@ fn main() {
 
     // Bind the ring signature to the set by hashing the Merkle root into the message.
     let message = merkle_root.as_slice();
-    let membership_proof = create_membership_proof(prover_acct, &public_keys, message, &mut rng);
+    let membership_proof = create_membership_proof(prover_acct, &public_keys, message, &mut rng)
+        .expect("failed to create membership proof");
 
     println!(
         "\nRing signature produced over {} public keys.",
