@@ -12,9 +12,9 @@ pub fn hash_bytes(input: impl AsRef<[u8]>) -> Hash {
 
 /// Hash two concatenated hashes. Used for Merkle tree parents.
 pub fn hash_pair(left: &Hash, right: &Hash) -> Hash {
-    let mut buf = Vec::with_capacity(left.len() + right.len());
-    buf.extend_from_slice(left);
-    buf.extend_from_slice(right);
+    let mut buf = [0u8; 64];
+    buf[..32].copy_from_slice(left);
+    buf[32..].copy_from_slice(right);
     hash_bytes(buf)
 }
 

@@ -58,7 +58,11 @@ impl Account {
 /// A vector of accounts, each generated with a deterministic sequence.
 pub fn generate_accounts(count: usize, seed: u64) -> Vec<Account> {
     let mut rng = StdRng::seed_from_u64(seed);
-    (0..count).map(|_| Account::random(&mut rng)).collect()
+    let mut accounts = Vec::with_capacity(count);
+    for _ in 0..count {
+        accounts.push(Account::random(&mut rng));
+    }
+    accounts
 }
 
 /// Format helpers for human-readable output.

@@ -28,7 +28,7 @@ impl MerkleTree {
 
         while levels.last().unwrap().len() > 1 {
             let prev = levels.last().unwrap();
-            let mut next = Vec::with_capacity(prev.len().div_ceil(2));
+            let mut next = Vec::with_capacity((prev.len() + 1) >> 1);
             for pair in prev.chunks(2) {
                 let left = pair[0];
                 let right = *pair.get(1).unwrap_or(&zero);
@@ -41,6 +41,7 @@ impl MerkleTree {
     }
 
     /// Returns the Merkle root hash.
+    #[must_use]
     pub fn root(&self) -> Hash {
         self.levels.last().unwrap()[0]
     }

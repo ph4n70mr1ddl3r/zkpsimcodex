@@ -112,6 +112,7 @@ pub fn ring_sign(
 /// * `message` - The message that was signed
 /// * `public_keys` - The ring of public keys used to create the signature
 /// * `signature` - The ring signature to verify
+#[must_use]
 pub fn ring_verify(
     message: &[u8],
     public_keys: &[EncodedPoint],
