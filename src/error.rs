@@ -2,6 +2,7 @@ use thiserror::Error;
 
 /// Error types for the ZKP simulator.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ZkpError {
     #[error("ring must contain at least {0} members")]
     InvalidRingSize(usize),

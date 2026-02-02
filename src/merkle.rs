@@ -43,6 +43,7 @@ impl MerkleTree {
     }
 
     /// Returns the Merkle root hash.
+    #[inline]
     #[must_use]
     pub fn root(&self) -> Hash {
         self.levels

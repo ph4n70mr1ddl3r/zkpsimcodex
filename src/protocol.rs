@@ -9,7 +9,7 @@ use rand::rngs::StdRng;
 ///
 /// The prover can demonstrate they own one of the accounts in the set
 /// without revealing which one.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MembershipProof {
     pub signature: RingSignature,
 }

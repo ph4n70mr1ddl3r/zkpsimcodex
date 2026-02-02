@@ -20,17 +20,19 @@ const CHALLENGE_PREFIX: &[u8] = b"zkpsimcodex-ring-challenge";
 /// The signature consists of an initial challenge and a vector of scalar responses,
 /// one for each public key in the ring. The verifier cannot determine which key
 /// was used to create the signature.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RingSignature {
     pub c0: Scalar,
     pub s: Vec<Scalar>,
 }
 
+#[inline]
 fn hash_to_scalar(data: impl AsRef<[u8]>) -> Scalar {
     let digest = Sha256::digest(data);
     <Scalar as Reduce<U256>>::reduce_bytes(&FieldBytes::from(digest))
 }
 
+#[inline]
 fn hash_challenge(message: &[u8], r_point: &ProjectivePoint) -> Scalar {
     let encoded_point = r_point.to_affine().to_encoded_point(true);
     let mut transcript =
@@ -41,6 +43,7 @@ fn hash_challenge(message: &[u8], r_point: &ProjectivePoint) -> Scalar {
     hash_to_scalar(transcript)
 }
 
+#[inline]
 fn validate_public_key(pk_bytes: &EncodedPoint) -> Result<ProjectivePoint> {
     let point = ProjectivePoint::from_encoded_point(pk_bytes)
         .into_option()

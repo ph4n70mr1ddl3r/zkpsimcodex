@@ -45,6 +45,8 @@ impl Account {
     }
 
     /// Returns the compressed SEC1-encoded public key.
+    #[inline]
+    #[must_use]
     pub fn public_key_compressed(&self) -> EncodedPoint {
         self.public_key.to_encoded_point(true)
     }
@@ -69,6 +71,14 @@ impl Account {
 ///
 /// # Returns
 /// A vector of accounts, each generated with a deterministic sequence.
+///
+/// # Examples
+/// ```
+/// use zkpsimcodex::account::generate_accounts;
+/// let accounts = generate_accounts(10, 42);
+/// assert_eq!(accounts.len(), 10);
+/// ```
+#[must_use]
 pub fn generate_accounts(count: usize, seed: u64) -> Vec<Account> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut accounts = Vec::with_capacity(count);
@@ -79,11 +89,15 @@ pub fn generate_accounts(count: usize, seed: u64) -> Vec<Account> {
 }
 
 /// Format an Ethereum address for human-readable output.
+#[inline]
+#[must_use]
 pub fn format_address(addr: &[u8; ADDRESS_SIZE]) -> String {
     format!("0x{}", hex::encode(addr))
 }
 
 /// Format a public key for human-readable output.
+#[inline]
+#[must_use]
 pub fn format_public_key(pk: &EncodedPoint) -> String {
     format!("0x{}", hex::encode(pk.as_bytes()))
 }

@@ -6,7 +6,15 @@ pub type Hash = [u8; 32];
 const HASH_SIZE: usize = 32;
 
 /// Hash arbitrary bytes into a 32-byte digest using SHA-256.
+///
+/// # Examples
+/// ```
+/// use zkpsimcodex::hashing::hash_bytes;
+/// let hash = hash_bytes(b"hello world");
+/// assert_eq!(hash.len(), 32);
+/// ```
 #[allow(dead_code)]
+#[must_use]
 pub fn hash_bytes(input: impl AsRef<[u8]>) -> Hash {
     let mut hasher = Sha256::new();
     hasher.update(input);
@@ -16,6 +24,17 @@ pub fn hash_bytes(input: impl AsRef<[u8]>) -> Hash {
 /// Hash two concatenated hashes. Used for Merkle tree parents.
 ///
 /// Concatenates the two 32-byte hashes and hashes the result.
+///
+/// # Examples
+/// ```
+/// use zkpsimcodex::hashing::hash_pair;
+/// let left = [1u8; 32];
+/// let right = [2u8; 32];
+/// let hash = hash_pair(&left, &right);
+/// assert_eq!(hash.len(), 32);
+/// ```
+#[inline]
+#[must_use]
 pub fn hash_pair(left: &Hash, right: &Hash) -> Hash {
     let mut hasher = Sha256::new();
     hasher.update(left);
@@ -26,6 +45,14 @@ pub fn hash_pair(left: &Hash, right: &Hash) -> Hash {
 /// Compute Keccak-256 (used for Ethereum-style addresses and leaves).
 ///
 /// Returns the 32-byte Keccak-256 hash of the input.
+///
+/// # Examples
+/// ```
+/// use zkpsimcodex::hashing::keccak256;
+/// let hash = keccak256(b"hello world");
+/// assert_eq!(hash.len(), 32);
+/// ```
+#[must_use]
 pub fn keccak256(input: impl AsRef<[u8]>) -> Hash {
     let mut keccak = Keccak::v256();
     let mut output = [0u8; HASH_SIZE];
