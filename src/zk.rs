@@ -5,6 +5,7 @@ use k256::{
         ff::Field,
         ops::Reduce,
         sec1::{FromEncodedPoint, ToEncodedPoint},
+        subtle::ConstantTimeEq,
         Group,
     },
     EncodedPoint, FieldBytes, ProjectivePoint, Scalar,
@@ -163,7 +164,7 @@ pub fn ring_verify(
         c = hash_challenge(message, &r_i);
     }
 
-    Ok(c == signature.c0)
+    Ok(c.ct_eq(&signature.c0).into())
 }
 
 #[cfg(test)]

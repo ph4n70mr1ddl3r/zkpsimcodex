@@ -8,15 +8,16 @@ mod zk;
 use account::{format_address, format_public_key, generate_accounts, Account};
 use hashing::Hash;
 use merkle::MerkleTree;
-use protocol::{create_membership_proof, verify_membership_proof};
+use protocol::{create_membership_proof, verify_membership_proof, MembershipProof};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 const DEFAULT_ACCOUNT_COUNT: usize = 100;
 const DEFAULT_SEED: u64 = 2024;
 const SEED_OFFSET: u64 = 99;
 
-#[cfg(test)]
-fn run_workflow(account_count: usize, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
+type ProofResult = Result<(Vec<Account>, Hash, usize, MembershipProof), Box<dyn std::error::Error>>;
+
+fn create_tree_and_proof(account_count: usize, seed: u64) -> ProofResult {
     let accounts = generate_accounts(account_count, seed);
     let leaves: Vec<Hash> = accounts.iter().map(|acct| acct.leaf).collect();
     let tree = MerkleTree::from_leaves(leaves);
@@ -33,6 +34,19 @@ fn run_workflow(account_count: usize, seed: u64) -> Result<(), Box<dyn std::erro
 
     let message = merkle_root.as_slice();
     let membership_proof = create_membership_proof(prover_acct, &public_keys, message, &mut rng)?;
+
+    Ok((accounts, merkle_root, target_index, membership_proof))
+}
+
+#[cfg(test)]
+fn run_workflow(account_count: usize, seed: u64) -> Result<(), Box<dyn std::error::Error>> {
+    let (accounts, merkle_root, _, membership_proof) = create_tree_and_proof(account_count, seed)?;
+    let public_keys: Vec<_> = accounts
+        .iter()
+        .map(|acct| acct.public_key_compressed())
+        .collect();
+
+    let message = merkle_root.as_slice();
     let verified = verify_membership_proof(&public_keys, message, &membership_proof)?;
 
     if !verified {
@@ -46,21 +60,13 @@ fn main() {
     let seed = DEFAULT_SEED;
 
     println!("Generating {DEFAULT_ACCOUNT_COUNT} dummy Ethereum-style accounts...");
-    let accounts = generate_accounts(DEFAULT_ACCOUNT_COUNT, seed);
-    let leaves: Vec<Hash> = accounts.iter().map(|acct| acct.leaf).collect();
+    let (accounts, merkle_root, target_index, membership_proof) =
+        create_tree_and_proof(DEFAULT_ACCOUNT_COUNT, seed)
+            .expect("Failed to create tree and proof");
 
-    println!(
-        "Building Merkle tree ({} leaves, padded to power of two)...",
-        leaves.len()
-    );
-    let tree = MerkleTree::from_leaves(leaves);
-    let merkle_root = tree.root();
     println!("Merkle root: 0x{}", hex::encode(merkle_root));
 
-    let mut rng = StdRng::seed_from_u64(seed + SEED_OFFSET);
-    let target_index = rng.gen_range(0..DEFAULT_ACCOUNT_COUNT);
     let prover_acct: &Account = &accounts[target_index];
-
     println!(
         "\nProver controls account #{target_index}: address {}, public key {}",
         format_address(&prover_acct.address),
@@ -73,16 +79,12 @@ fn main() {
         .map(|acct| acct.public_key_compressed())
         .collect();
 
-    // Bind the ring signature to the set by hashing the Merkle root into the message.
-    let message = merkle_root.as_slice();
-    let membership_proof = create_membership_proof(prover_acct, &public_keys, message, &mut rng)
-        .expect("failed to create membership proof");
-
     println!(
         "\nRing signature produced over {} public keys.",
         public_keys.len()
     );
 
+    let message = merkle_root.as_slice();
     let verified = verify_membership_proof(&public_keys, message, &membership_proof)
         .expect("verification failed");
     println!(

@@ -3,8 +3,6 @@ use tiny_keccak::{Hasher, Keccak};
 
 pub type Hash = [u8; 32];
 
-const HASH_SIZE: usize = 32;
-
 /// Hash two concatenated hashes. Used for Merkle tree parents.
 ///
 /// Concatenates the two 32-byte hashes and hashes the result.
@@ -39,7 +37,7 @@ pub fn hash_pair(left: &Hash, right: &Hash) -> Hash {
 #[must_use]
 pub fn keccak256(input: impl AsRef<[u8]>) -> Hash {
     let mut keccak = Keccak::v256();
-    let mut output = [0u8; HASH_SIZE];
+    let mut output = [0u8; 32];
     keccak.update(input.as_ref());
     keccak.finalize(&mut output);
     output
@@ -90,8 +88,8 @@ mod tests {
         let left = [1u8; 32];
         let right = [2u8; 32];
         let hash = hash_pair(&left, &right);
-        assert_eq!(hash.len(), HASH_SIZE);
+        assert_eq!(hash.len(), 32);
         let keccak = keccak256(b"test");
-        assert_eq!(keccak.len(), HASH_SIZE);
+        assert_eq!(keccak.len(), 32);
     }
 }
