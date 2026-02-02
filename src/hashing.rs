@@ -16,10 +16,10 @@ pub fn hash_bytes(input: impl AsRef<[u8]>) -> Hash {
 ///
 /// Concatenates the two 32-byte hashes and hashes the result.
 pub fn hash_pair(left: &Hash, right: &Hash) -> Hash {
-    let mut buf = [0u8; HASH_SIZE * 2];
-    buf[..HASH_SIZE].copy_from_slice(left);
-    buf[HASH_SIZE..].copy_from_slice(right);
-    hash_bytes(buf)
+    let mut hasher = Sha256::new();
+    hasher.update(left);
+    hasher.update(right);
+    hasher.finalize().into()
 }
 
 /// Compute Keccak-256 (used for Ethereum-style addresses and leaves).

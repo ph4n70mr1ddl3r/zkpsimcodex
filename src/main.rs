@@ -19,6 +19,8 @@ fn main() {
     let account_count = DEFAULT_ACCOUNT_COUNT;
     let seed = DEFAULT_SEED;
 
+    assert!(account_count > 0, "account_count must be positive");
+
     println!("Generating {account_count} dummy Ethereum-style accounts...");
     let accounts = generate_accounts(account_count, seed);
     let leaves: Vec<Hash> = accounts.iter().map(|acct| acct.leaf).collect();
@@ -57,7 +59,8 @@ fn main() {
         public_keys.len()
     );
 
-    let verified = verify_membership_proof(&public_keys, message, &membership_proof);
+    let verified = verify_membership_proof(&public_keys, message, &membership_proof)
+        .expect("verification failed");
     println!(
         "\nVerification result: {}",
         if verified {

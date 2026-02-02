@@ -40,7 +40,8 @@ pub fn create_membership_proof(
         .position(|pk| pk == &signer_pk)
         .ok_or(crate::error::ZkpError::SignerNotFound)?;
 
-    let signature = ring_sign(message, public_keys, signer_index, &account.zk_scalar, rng)?;
+    let signature = account
+        .with_zk_scalar(|scalar| ring_sign(message, public_keys, signer_index, scalar, rng))?;
 
     Ok(MembershipProof { signature })
 }
@@ -58,7 +59,7 @@ pub fn verify_membership_proof(
     public_keys: &[k256::EncodedPoint],
     message: &[u8],
     proof: &MembershipProof,
-) -> bool {
+) -> Result<bool> {
     ring_verify(message, public_keys, &proof.signature)
 }
 
@@ -81,7 +82,7 @@ mod tests {
         let message = b"membership test message";
 
         let proof = create_membership_proof(prover, &public_keys, message, &mut rng).unwrap();
-        assert!(verify_membership_proof(&public_keys, message, &proof));
+        assert!(verify_membership_proof(&public_keys, message, &proof).unwrap());
     }
 
     #[test]
@@ -97,11 +98,7 @@ mod tests {
         let message = b"membership test message";
 
         let proof = create_membership_proof(prover, &public_keys, message, &mut rng).unwrap();
-        assert!(!verify_membership_proof(
-            &public_keys,
-            b"wrong message",
-            &proof
-        ));
+        assert!(!verify_membership_proof(&public_keys, b"wrong message", &proof).unwrap());
     }
 
     #[test]

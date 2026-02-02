@@ -15,7 +15,7 @@ pub struct Account {
     pub public_key: PublicKey,
     pub address: [u8; 20],
     pub leaf: Hash,
-    pub zk_scalar: Scalar,
+    zk_scalar: Scalar,
 }
 
 impl Account {
@@ -48,6 +48,17 @@ impl Account {
     /// Returns the compressed SEC1-encoded public key.
     pub fn public_key_compressed(&self) -> EncodedPoint {
         self.public_key.to_encoded_point(true)
+    }
+
+    /// Provides controlled access to the ZK scalar for signing operations.
+    ///
+    /// This method allows the caller to use the private scalar in a controlled
+    /// manner without directly exposing it, enhancing security.
+    pub fn with_zk_scalar<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&Scalar) -> R,
+    {
+        f(&self.zk_scalar)
     }
 }
 
@@ -92,7 +103,7 @@ mod tests {
 
         assert_eq!(acct1.address, acct2.address);
         assert_eq!(acct1.leaf, acct2.leaf);
-        assert_eq!(acct1.zk_scalar, acct2.zk_scalar);
+        assert_eq!(acct1.with_zk_scalar(|s| *s), acct2.with_zk_scalar(|s| *s));
     }
 
     #[test]
@@ -104,7 +115,7 @@ mod tests {
 
         assert_ne!(acct1.address, acct2.address);
         assert_ne!(acct1.leaf, acct2.leaf);
-        assert_ne!(acct1.zk_scalar, acct2.zk_scalar);
+        assert_ne!(acct1.with_zk_scalar(|s| *s), acct2.with_zk_scalar(|s| *s));
     }
 
     #[test]

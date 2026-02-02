@@ -14,6 +14,15 @@ pub enum ZkpError {
 
     #[error("signer's public key not found in the public keys set")]
     SignerNotFound,
+
+    #[error("duplicate public key in ring")]
+    DuplicatePublicKey,
+
+    #[error("invalid secret key (zero)")]
+    InvalidSecretKey,
+
+    #[error("public keys set is empty")]
+    InvalidPublicKeySet,
 }
 
 /// Result type alias for ZKP operations.

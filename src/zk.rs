@@ -11,6 +11,7 @@ use k256::{
 };
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 const MIN_RING_SIZE: usize = 2;
 const CHALLENGE_PREFIX: &[u8] = b"zkpsimcodex-ring-challenge";
@@ -66,6 +67,7 @@ fn validate_public_key(pk_bytes: &EncodedPoint) -> Result<ProjectivePoint> {
 /// # Errors
 /// Returns an error if the ring has fewer than 2 members, if signer_index is out of bounds,
 /// or if any public key is invalid.
+#[must_use]
 pub fn ring_sign(
     message: &[u8],
     public_keys: &[EncodedPoint],
@@ -79,6 +81,12 @@ pub fn ring_sign(
     }
     if signer_index >= n {
         return Err(ZkpError::InvalidSignerIndex(signer_index, n));
+    }
+    if public_keys.len() != public_keys.iter().collect::<HashSet<_>>().len() {
+        return Err(ZkpError::DuplicatePublicKey);
+    }
+    if secret_scalar == &Scalar::ZERO {
+        return Err(ZkpError::InvalidSecretKey);
     }
 
     let mut s_values = vec![Scalar::ZERO; n];
@@ -125,29 +133,34 @@ pub fn ring_sign(
 /// * `message` - The message that was signed
 /// * `public_keys` - The ring of public keys used to create the signature
 /// * `signature` - The ring signature to verify
-#[must_use]
+///
+/// # Errors
+/// Returns an error if the public keys set is empty.
 pub fn ring_verify(
     message: &[u8],
     public_keys: &[EncodedPoint],
     signature: &RingSignature,
-) -> bool {
+) -> Result<bool> {
+    if public_keys.is_empty() {
+        return Err(ZkpError::InvalidPublicKeySet);
+    }
     let n = public_keys.len();
-    if n == 0 || signature.s.len() != n {
-        return false;
+    if signature.s.len() != n {
+        return Ok(false);
     }
 
     let mut c = signature.c0;
     for (s_i, pk_bytes) in signature.s.iter().zip(public_keys.iter()) {
         let pub_point = match validate_public_key(pk_bytes) {
             Ok(p) => p,
-            Err(_) => return false,
+            Err(_) => return Ok(false),
         };
 
         let r_i = ProjectivePoint::GENERATOR * s_i + (pub_point * (-c));
         c = hash_challenge(message, &r_i);
     }
 
-    c == signature.c0
+    Ok(c == signature.c0)
 }
 
 #[cfg(test)]
@@ -172,9 +185,9 @@ mod tests {
         let message = b"test message";
 
         let signature = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng).unwrap();
-        assert!(ring_verify(message, &public_keys, &signature));
+        assert!(ring_verify(message, &public_keys, &signature).unwrap());
 
-        assert!(!ring_verify(b"wrong message", &public_keys, &signature));
+        assert!(!ring_verify(b"wrong message", &public_keys, &signature).unwrap());
     }
 
     #[test]
@@ -201,7 +214,7 @@ mod tests {
             &mut rng,
         )
         .unwrap();
-        assert!(ring_verify(message, &public_keys, &signature));
+        assert!(ring_verify(message, &public_keys, &signature).unwrap());
     }
 
     #[test]
@@ -219,7 +232,7 @@ mod tests {
         ];
 
         let signature = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng).unwrap();
-        assert!(ring_verify(message, &public_keys, &signature));
+        assert!(ring_verify(message, &public_keys, &signature).unwrap());
     }
 
     #[test]
