@@ -119,4 +119,40 @@ mod tests {
             Err(crate::error::ZkpError::SignerNotFound)
         ));
     }
+
+    #[test]
+    fn test_verify_empty_public_keys() {
+        let accounts = generate_accounts(10, 42);
+        let prover = &accounts[3];
+        let public_keys: Vec<_> = accounts
+            .iter()
+            .map(|acct| acct.public_key_compressed())
+            .collect();
+
+        let mut rng = StdRng::seed_from_u64(100);
+        let message = b"membership test message";
+
+        let proof = create_membership_proof(prover, &public_keys, message, &mut rng).unwrap();
+        let result = verify_membership_proof(&[], message, &proof);
+        assert!(matches!(
+            result,
+            Err(crate::error::ZkpError::InvalidPublicKeySet)
+        ));
+    }
+
+    #[test]
+    fn test_create_proof_large_ring() {
+        let accounts = generate_accounts(200, 42);
+        let prover = &accounts[150];
+        let public_keys: Vec<_> = accounts
+            .iter()
+            .map(|acct| acct.public_key_compressed())
+            .collect();
+
+        let mut rng = StdRng::seed_from_u64(500);
+        let message = b"large ring test";
+
+        let proof = create_membership_proof(prover, &public_keys, message, &mut rng).unwrap();
+        assert!(verify_membership_proof(&public_keys, message, &proof).unwrap());
+    }
 }

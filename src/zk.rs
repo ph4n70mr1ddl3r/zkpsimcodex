@@ -165,9 +165,7 @@ pub fn ring_verify(
 
     let mut c = signature.c0;
     for (s_i, pk_bytes) in signature.s.iter().zip(public_keys.iter()) {
-        let Ok(pub_point) = validate_public_key(pk_bytes) else {
-            return Ok(false);
-        };
+        let pub_point = validate_public_key(pk_bytes)?;
 
         let r_i = ProjectivePoint::GENERATOR * s_i + (pub_point * (-c));
         c = hash_challenge(message, &r_i);
@@ -277,5 +275,55 @@ mod tests {
 
         let result = ring_sign(message, &public_keys, 5, &secret_scalar, &mut rng);
         assert!(matches!(result, Err(ZkpError::InvalidSignerIndex(_, _))));
+    }
+
+    #[test]
+    fn test_ring_verify_empty_public_keys() {
+        let mut rng = StdRng::seed_from_u64(999);
+        let secret_key = SecretKey::random(&mut rng);
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"test message";
+
+        let public_keys = vec![
+            secret_key.public_key().to_encoded_point(true),
+            SecretKey::random(&mut rng)
+                .public_key()
+                .to_encoded_point(true),
+        ];
+        let signature = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng).unwrap();
+
+        let result = ring_verify(message, &[], &signature);
+        assert!(matches!(result, Err(ZkpError::InvalidPublicKeySet)));
+    }
+
+    #[test]
+    fn test_ring_sign_duplicate_public_keys() {
+        let mut rng = StdRng::seed_from_u64(777);
+        let secret_key = SecretKey::random(&mut rng);
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"test message";
+
+        let pk = secret_key.public_key().to_encoded_point(true);
+        let public_keys = vec![pk, pk];
+
+        let result = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng);
+        assert!(matches!(result, Err(ZkpError::DuplicatePublicKey)));
+    }
+
+    #[test]
+    fn test_ring_sign_large_ring() {
+        let mut rng = StdRng::seed_from_u64(12345);
+        let secret_key = SecretKey::random(&mut rng);
+        let secret_scalar = *secret_key.to_nonzero_scalar();
+        let message = b"large ring test";
+
+        let mut public_keys = vec![secret_key.public_key().to_encoded_point(true)];
+        for _ in 0..149 {
+            let sk = SecretKey::random(&mut rng);
+            public_keys.push(sk.public_key().to_encoded_point(true));
+        }
+
+        let signature = ring_sign(message, &public_keys, 0, &secret_scalar, &mut rng).unwrap();
+        assert!(ring_verify(message, &public_keys, &signature).unwrap());
     }
 }
