@@ -66,7 +66,7 @@ impl Account {
 /// Deterministically generate a reproducible list of accounts.
 ///
 /// # Arguments
-/// * `count` - Number of accounts to generate
+/// * `count` - Number of accounts to generate (0 returns empty vector)
 /// * `seed` - Seed for the random number generator
 ///
 /// # Returns
@@ -80,6 +80,9 @@ impl Account {
 /// ```
 #[must_use]
 pub fn generate_accounts(count: usize, seed: u64) -> Vec<Account> {
+    if count == 0 {
+        return Vec::new();
+    }
     let mut rng = StdRng::seed_from_u64(seed);
     let mut accounts = Vec::with_capacity(count);
     for _ in 0..count {
@@ -135,6 +138,13 @@ mod tests {
     fn test_generate_accounts_count() {
         let accounts = generate_accounts(10, 42);
         assert_eq!(accounts.len(), 10);
+    }
+
+    #[test]
+    fn test_generate_accounts_zero_count() {
+        let accounts = generate_accounts(0, 42);
+        assert_eq!(accounts.len(), 0);
+        assert!(accounts.is_empty());
     }
 
     #[test]

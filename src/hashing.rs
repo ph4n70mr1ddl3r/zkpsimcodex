@@ -5,22 +5,6 @@ pub type Hash = [u8; 32];
 
 const HASH_SIZE: usize = 32;
 
-/// Hash arbitrary bytes into a 32-byte digest using SHA-256.
-///
-/// # Examples
-/// ```
-/// use zkpsimcodex::hashing::hash_bytes;
-/// let hash = hash_bytes(b"hello world");
-/// assert_eq!(hash.len(), 32);
-/// ```
-#[allow(dead_code)]
-#[must_use]
-pub fn hash_bytes(input: impl AsRef<[u8]>) -> Hash {
-    let mut hasher = Sha256::new();
-    hasher.update(input);
-    hasher.finalize().into()
-}
-
 /// Hash two concatenated hashes. Used for Merkle tree parents.
 ///
 /// Concatenates the two 32-byte hashes and hashes the result.
@@ -66,21 +50,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hash_bytes_deterministic() {
-        let data = b"test data";
-        let hash1 = hash_bytes(data);
-        let hash2 = hash_bytes(data);
-        assert_eq!(hash1, hash2);
-    }
-
-    #[test]
-    fn test_hash_bytes_different() {
-        let hash1 = hash_bytes(b"data1");
-        let hash2 = hash_bytes(b"data2");
-        assert_ne!(hash1, hash2);
-    }
-
-    #[test]
     fn test_hash_pair_deterministic() {
         let left = [1u8; 32];
         let right = [2u8; 32];
@@ -109,14 +78,18 @@ mod tests {
     #[test]
     fn test_keccak256_different_from_sha256() {
         let data = b"test data";
-        let sha_hash = hash_bytes(data);
+        let left = [1u8; 32];
+        let right = [2u8; 32];
+        let sha_hash = hash_pair(&left, &right);
         let keccak_hash = keccak256(data);
         assert_ne!(sha_hash, keccak_hash);
     }
 
     #[test]
     fn test_hash_size() {
-        let hash = hash_bytes(b"test");
+        let left = [1u8; 32];
+        let right = [2u8; 32];
+        let hash = hash_pair(&left, &right);
         assert_eq!(hash.len(), HASH_SIZE);
         let keccak = keccak256(b"test");
         assert_eq!(keccak.len(), HASH_SIZE);
